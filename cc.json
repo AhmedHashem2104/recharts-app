@@ -1,0 +1,10 @@
+[
+  { "month": "01/2025", "csat_percent": 76, "dsat_percent": 11 },
+  { "month": "02/2025", "csat_percent": 50, "dsat_percent": 26 },
+  { "month": "03/2025", "csat_percent": 100.0, "dsat_percent": 0.0 },
+  { "month": "04/2025", "csat_percent": null, "dsat_percent": 45 },
+  { "month": "05/2025", "csat_percent": 22, "dsat_percent": null },
+  { "month": "06/2025", "csat_percent": 100.0, "dsat_percent": 0.0 },
+  { "month": "07/2025", "csat_percent": 105, "dsat_percent": 2 },
+  { "month": "08/2025", "csat_percent": 34, "dsat_percent": 55 }
+]

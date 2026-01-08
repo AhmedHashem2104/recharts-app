@@ -1,345 +1,550 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
-import * as Recharts from "recharts";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useCopilotReadable } from "@copilotkit/react-core";
+import ReactECharts from "echarts-for-react";
+import type { EChartsOption } from "echarts";
+import {
+  detectEChartsType,
+  getEChartsConfig,
+  getRandomColorPalette,
+  type EChartsElementConfig,
+} from "./echartsConfig";
 
-interface ChartDataPoint {
-  [key: string]: string | number;
-}
+// Support any data structure - nested objects, arrays, etc.
+type ChartDataPoint = Record<string, unknown>;
+
+// Helper function to flatten nested objects and extract all keys
+const flattenObject = (
+  obj: unknown,
+  prefix = "",
+  result: Record<string, unknown> = {}
+): Record<string, unknown> => {
+  if (!obj || typeof obj !== "object") {
+    return result;
+  }
+
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = (obj as Record<string, unknown>)[key];
+      const newKey = prefix ? `${prefix}.${key}` : key;
+
+      if (value === null || value === undefined) {
+        result[newKey] = value;
+      } else if (Array.isArray(value)) {
+        if (value.length > 0) {
+          const firstItem = value[0];
+          if (typeof firstItem === "number" || typeof firstItem === "string") {
+            result[newKey] = value;
+          } else if (typeof firstItem === "object" && firstItem !== null) {
+            value.forEach((item, idx) => {
+              flattenObject(item, `${newKey}[${idx}]`, result);
+            });
+          }
+        }
+      } else if (typeof value === "object" && !(value instanceof Date)) {
+        flattenObject(value, newKey, result);
+      } else {
+        result[newKey] = value;
+      }
+    }
+  }
+  return result;
+};
 
 interface ChartGeneratorProps {
   data: ChartDataPoint[];
   prompt: string;
 }
 
-interface ChartElement {
-  type: string;
-  props?: Record<string, unknown>;
-  children?: ChartElement[];
-}
-
 interface GeneratedChartConfig {
   chartType: string;
-  componentName: string;
-  elements: ChartElement[];
+  echartsOption: EChartsOption; // ECharts option object
   dataMapping: {
-    nameKey: string;
-    valueKey: string;
+    nameKey?: string;
+    valueKey?: string;
+    dataKeys?: string;
+    [key: string]: string | undefined;
   };
   colors?: string[];
+  promptHash?: string;
 }
 
 const ChartGenerator = ({ data, prompt }: ChartGeneratorProps) => {
   const [chartConfig, setChartConfig] = useState<GeneratedChartConfig | null>(
     null
   );
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const previousHashRef = useRef<string>("");
 
   // Make data and prompt readable to CopilotKit
   useCopilotReadable({
-    description: "The chart data to visualize",
+    description:
+      "The chart data to visualize. This is an array of objects containing the data points. Each object can have nested structures, arrays, or simple key-value pairs. The data may contain numeric values, strings, dates, or mixed types. The system supports a comprehensive set of chart types: bar charts (including stacked and grouped), line charts (with trendlines), pie/donut charts, area charts (stacked), scatter plots (including bubble and effect scatter), radar charts, heatmaps, treemaps, funnels, sankey diagrams, sunburst charts, candlestick charts (for financial/stock data with OHLC), parallel coordinates (for multivariate data), network graphs (for relationships), theme rivers (for event flows), route lines, hierarchical trees, calendar heatmaps, polar area charts, histograms, box plots, lollipop charts, and density plots. Analyze the structure to identify appropriate keys for axes, series, and labels. The system automatically flattens nested objects and detects numeric, string, and date fields.",
     value: data,
   });
 
   useCopilotReadable({
-    description: "The user's description of what chart they want",
+    description:
+      "The user's natural language description of what chart they want. Supported chart types include: bar, line, pie, area, scatter, radar, heatmap, treemap, funnel, sankey, sunburst, candlestick (for financial data), parallel (for multivariate analysis), graph (for network diagrams), themeriver (for event flows), effectscatter (animated scatter), lines (for routes), tree (hierarchical), calendar (calendar heatmap), and variations like stackedbar, groupedbar, stackedarea, donut, bubble, polararea, histogram, boxplot, lollipop, density. The description can include: chart type, styling preferences, axis labels, colors, titles, data series to display, comparisons, trends, trendlines, or any other visualization requirements. Interpret the intent flexibly and suggest the most appropriate chart configuration. The system can handle requests like 'create a candlestick chart for stock data', 'show a network graph of relationships', 'display parallel coordinates for multivariate analysis', 'create a calendar heatmap of daily activity', etc.",
     value: prompt,
   });
 
-  // Get standardized keys
   const dataKeys = useMemo(() => {
-    if (!data || data.length === 0)
-      return { nameKey: "name", valueKey: "value" };
+    if (!data || data.length === 0) {
+      return {
+        allKeys: [],
+        numericKeys: [],
+        stringKeys: [],
+        dateKeys: [],
+        nameKey: "",
+        valueKey: "",
+        flattenedData: [],
+      };
+    }
 
-    const keys = Object.keys(data[0] || {});
-    const nameKey = keys.includes("name") ? "name" : keys[0] || "name";
-    const valueKey = keys.includes("value")
-      ? "value"
-      : keys[1] || keys[0] || "value";
+    const firstItem = data[0];
+    const flattened = flattenObject(firstItem);
+    const allKeys = Object.keys(flattened);
 
-    return { nameKey, valueKey };
+    const numericKeys: string[] = [];
+    const stringKeys: string[] = [];
+    const dateKeys: string[] = [];
+
+    allKeys.forEach((key) => {
+      const value = flattened[key];
+      if (typeof value === "number" && !isNaN(value)) {
+        numericKeys.push(key);
+      } else if (typeof value === "string") {
+        stringKeys.push(key);
+        // Check if it's a date string
+        if (!isNaN(Date.parse(value))) {
+          dateKeys.push(key);
+        }
+      }
+    });
+
+    // Auto-detect name key (for labels/categories) - enhanced for generic JSON schemas
+    const nameKey =
+      stringKeys.find((k) =>
+        /name|label|category|title|id|key|agent|month|day|date|time|year|period|quarter|week|season|location|region|country|city|state|product|item|type|class|group|team|department|category|tag/i.test(
+          k
+        )
+      ) ||
+      dateKeys[0] ||
+      stringKeys[0] ||
+      allKeys[0];
+
+    // Auto-detect value key (for numeric values) - enhanced for generic JSON schemas
+    const valueKey =
+      numericKeys.find((k) =>
+        /value|amount|count|total|sum|quantity|number|price|cost|revenue|sales|score|rating|interaction|kpi|satisfaction|metric|measure|data|result|outcome|performance|efficiency|rate|percentage|percent|ratio|index|level|size|volume|weight|length|height|width|depth|area|distance|speed|time|duration|frequency/i.test(
+          k
+        )
+      ) ||
+      numericKeys[0] ||
+      "";
+
+    // Flatten all data items
+    const flattenedData = data.map((item) => flattenObject(item));
+
+    return {
+      allKeys,
+      numericKeys,
+      stringKeys,
+      dateKeys,
+      nameKey,
+      valueKey,
+      flattenedData,
+    };
   }, [data]);
 
-  // Action to generate chart configuration - completely generic
-  useCopilotAction({
-    name: "generateChartComponent",
-    description:
-      "Generate a complete chart component configuration based on data structure and user prompt. Return a generic configuration that can render any chart type.",
-    parameters: [
-      {
-        name: "chartType",
-        type: "string",
-        description:
-          "The type of chart: 'bar', 'line', 'pie', 'area', 'scatter', etc.",
-        required: true,
-      },
-      {
-        name: "elements",
-        type: "object",
-        description:
-          "Array of chart elements configuration. Each element has: type (component name), props (properties), and optional children array.",
-        required: true,
-      },
-      {
-        name: "nameKey",
-        type: "string",
-        description: "The key to use for labels/categories (x-axis)",
-        required: true,
-      },
-      {
-        name: "valueKey",
-        type: "string",
-        description: "The key to use for numeric values (y-axis/data)",
-        required: true,
-      },
-      {
-        name: "colors",
-        type: "object",
-        description: "Optional array of color hex codes",
-        required: false,
-      },
-    ],
-    handler: async ({ chartType, elements, nameKey, valueKey, colors }) => {
-      setIsGenerating(true);
-      try {
-        const config: GeneratedChartConfig = {
-          chartType: chartType.toLowerCase(),
-          componentName: `${
-            chartType.charAt(0).toUpperCase() + chartType.slice(1)
-          }Chart`,
-          elements: Array.isArray(elements) ? elements : [],
-          dataMapping: {
-            nameKey: nameKey || dataKeys.nameKey,
-            valueKey: valueKey || dataKeys.valueKey,
-          },
-          colors: Array.isArray(colors)
-            ? colors
-            : [
-                "#0066ff", // Primary color rgb(0, 102, 255)
-                "#3385ff", // Primary light
-                "#0052cc", // Primary dark
-                "#4d9aff", // Gradient start
-                "#2d7aff", // Gradient end
-                "#1a75ff", // Primary hover
-                "#66a3ff", // Lighter variant
-                "#003d99", // Darker variant
-              ],
-        };
+  // Create a hash of data and prompt to detect changes
+  // This hash will change whenever data or prompt changes, triggering a re-render
+  const dataPromptHash = useMemo(() => {
+    if (!data || data.length === 0 || !prompt) return "";
+    try {
+      const dataStr = JSON.stringify(data);
+      const promptHash = prompt.trim();
+      // Use a more comprehensive hash: prompt + full data string length + first/last parts of data
+      // This ensures we detect any data changes
+      const dataStart = dataStr.slice(0, 100);
+      const dataEnd = dataStr.slice(-100);
+      return `${promptHash}_${data.length}_${dataStr.length}_${dataStart}_${dataEnd}`;
+    } catch {
+      // Fallback hash if JSON.stringify fails
+      return `${prompt.trim()}_${data.length}_error`;
+    }
+  }, [data, prompt]);
 
-        setChartConfig(config);
-      } catch (error) {
-        console.error("Error generating chart config:", error);
-      } finally {
-        setIsGenerating(false);
-      }
-    },
-  });
-
-  // Auto-generate chart when data or prompt changes
+  // Auto-generate chart configuration based on data and prompt
   useEffect(() => {
-    if (data && data.length > 0 && dataKeys.nameKey && dataKeys.valueKey) {
-      const promptLower = prompt.toLowerCase();
-      let chartType = "line";
-      if (promptLower.includes("bar") || promptLower.includes("column")) {
-        chartType = "bar";
-      } else if (promptLower.includes("pie") || promptLower.includes("donut")) {
-        chartType = "pie";
-      } else if (promptLower.includes("area")) {
-        chartType = "area";
-      } else if (promptLower.includes("line")) {
+    if (
+      data &&
+      data.length > 0 &&
+      prompt &&
+      prompt.trim().length > 0 &&
+      dataKeys.nameKey &&
+      dataKeys.valueKey
+    ) {
+      // Check if we already have a config for this exact prompt and data combination
+      if (previousHashRef.current === dataPromptHash) {
+        return;
+      }
+
+      // Update the ref to track this hash
+      previousHashRef.current = dataPromptHash;
+
+      const promptLower = prompt.toLowerCase().trim();
+      let hasTrendline = false;
+      let multipleTrendlines = false;
+
+      // Check for trendline
+      if (
+        promptLower.includes("dual trendline") ||
+        promptLower.includes("multiple trendline") ||
+        promptLower.match(/\b(dual|multiple)\s*(trendline|trend\s*line)\b/)
+      ) {
+        hasTrendline = true;
+        multipleTrendlines = true;
+      } else if (
+        promptLower.includes("trendline") ||
+        promptLower.includes("trend line") ||
+        promptLower.includes("regression") ||
+        promptLower.includes("linear trend") ||
+        promptLower.match(/\b(trendline|trend\s*line|regression)\b/)
+      ) {
+        hasTrendline = true;
+      }
+
+      // Detect chart type
+      let chartType = detectEChartsType(prompt);
+      if (hasTrendline && chartType !== "line" && chartType !== "scatter") {
         chartType = "line";
       }
 
-      // Generate default configuration
-      const defaultConfig: GeneratedChartConfig = {
-        chartType,
-        componentName: `${
-          chartType.charAt(0).toUpperCase() + chartType.slice(1)
-        }Chart`,
-        elements: generateDefaultElements(chartType, dataKeys),
-        dataMapping: dataKeys,
-        colors: [
-          "#0066ff", // Primary color rgb(0, 102, 255)
-          "#3385ff", // Primary light
-          "#0052cc", // Primary dark
-          "#4d9aff", // Gradient start
-          "#2d7aff", // Gradient end
-          "#1a75ff", // Primary hover
-          "#66a3ff", // Lighter variant
-          "#003d99", // Darker variant
-        ],
+      // Extract data keys from prompt
+      const mentionedKeys: string[] = [];
+      const vsPattern = /(\w+)\s+(?:vs|versus|and|&)\s+(\w+)/i;
+      const vsMatch = prompt.match(vsPattern);
+      if (vsMatch) {
+        const key1 = vsMatch[1].trim();
+        const key2 = vsMatch[2].trim();
+        const foundKey1 = dataKeys.allKeys.find((k) => {
+          const kLower = k.toLowerCase();
+          const key1Lower = key1.toLowerCase();
+          return (
+            kLower === key1Lower ||
+            kLower.includes(key1Lower) ||
+            key1Lower.includes(kLower) ||
+            kLower.replace(/[_-]/g, "") === key1Lower.replace(/[_-]/g, "")
+          );
+        });
+        const foundKey2 = dataKeys.allKeys.find((k) => {
+          const kLower = k.toLowerCase();
+          const key2Lower = key2.toLowerCase();
+          return (
+            kLower === key2Lower ||
+            kLower.includes(key2Lower) ||
+            key2Lower.includes(kLower) ||
+            kLower.replace(/[_-]/g, "") === key2Lower.replace(/[_-]/g, "")
+          );
+        });
+        if (foundKey1 && !mentionedKeys.includes(foundKey1)) {
+          mentionedKeys.push(foundKey1);
+        }
+        if (foundKey2 && !mentionedKeys.includes(foundKey2)) {
+          mentionedKeys.push(foundKey2);
+        }
+      }
+
+      // Check for keys mentioned directly - enhanced matching for generic JSON schemas
+      dataKeys.allKeys.forEach((key) => {
+        const keyLower = key.toLowerCase();
+        const keyFormatted = key.replace(/[_-]/g, " ").toLowerCase();
+        const keyNoUnderscore = keyLower.replace(/[_-]/g, "");
+        const keyParts = keyLower.split(/[._-]/); // Split by common separators
+
+        // Check if key or its parts are mentioned in prompt
+        const isMentioned =
+          promptLower.includes(keyLower) ||
+          promptLower.includes(keyFormatted) ||
+          promptLower.includes(key.replace(/_/g, " ").toLowerCase()) ||
+          promptLower.includes(key.replace(/\./g, " ").toLowerCase()) ||
+          // Check if any part of the key is mentioned
+          keyParts.some(
+            (part) => part.length >= 3 && promptLower.includes(part)
+          ) ||
+          // Check word-by-word matching
+          promptLower.split(/\s+/).some((word) => {
+            const wordClean = word.toLowerCase().replace(/[^a-z0-9]/g, "");
+            return (
+              wordClean.length >= 3 &&
+              (keyNoUnderscore.includes(wordClean) ||
+                wordClean.includes(keyNoUnderscore) ||
+                keyParts.some(
+                  (part) => part.includes(wordClean) || wordClean.includes(part)
+                ))
+            );
+          });
+
+        if (isMentioned && !mentionedKeys.includes(key)) {
+          mentionedKeys.push(key);
+        }
+      });
+
+      // Determine which keys to use
+      let nameKeyToUse = dataKeys.nameKey;
+      let valueKeyToUse = dataKeys.valueKey;
+      let dataKeysToUse: string | undefined;
+
+      if (mentionedKeys.length > 0) {
+        const mentionedNameKey = mentionedKeys.find(
+          (key) =>
+            dataKeys.stringKeys.includes(key) ||
+            dataKeys.dateKeys.includes(key) ||
+            /name|label|category|title|id|key|agent|period|quarter|week|season|location|region|country|city|state|product|item|type|class|group|team|department|tag/i.test(
+              key
+            )
+        );
+        if (mentionedNameKey) {
+          nameKeyToUse = mentionedNameKey;
+        }
+
+        const mentionedValueKeys = mentionedKeys.filter(
+          (key) =>
+            dataKeys.numericKeys.includes(key) ||
+            /value|amount|count|total|sum|quantity|number|price|cost|revenue|sales|score|rating|interaction|kpi|satisfaction|metric|measure|data|result|outcome|performance|efficiency|rate|percentage|percent|ratio|index|level|size|volume|weight|length|height|width|depth|area|distance|speed|time|duration|frequency/i.test(
+              key
+            )
+        );
+        if (mentionedValueKeys.length > 0) {
+          valueKeyToUse = mentionedValueKeys[0];
+          if (mentionedValueKeys.length > 1) {
+            dataKeysToUse = mentionedValueKeys.join(",");
+          }
+        }
+      }
+
+      if (
+        (promptLower.includes(" vs ") ||
+          promptLower.includes(" versus ") ||
+          promptLower.includes(" and ") ||
+          multipleTrendlines) &&
+        dataKeys.numericKeys.length >= 2
+      ) {
+        const promptWords = promptLower.split(/\s+/);
+        const matchingKeys = dataKeys.numericKeys.filter((key) => {
+          const keyLower = key.toLowerCase();
+          return promptWords.some(
+            (word) =>
+              word.length >= 3 &&
+              (keyLower.includes(word) || word.includes(keyLower))
+          );
+        });
+        if (matchingKeys.length >= 2) {
+          dataKeysToUse = matchingKeys.join(",");
+          valueKeyToUse = matchingKeys[0];
+        } else if (dataKeys.numericKeys.length >= 2) {
+          dataKeysToUse = dataKeys.numericKeys.slice(0, 2).join(",");
+          valueKeyToUse = dataKeys.numericKeys[0];
+        }
+      }
+
+      // Extract colors from prompt - supports multiple colors
+      const extractColors = (promptText: string): string[] | undefined => {
+        const colorMap: Record<string, string> = {
+          red: "#ff0000",
+          blue: "#0066ff",
+          green: "#00cc00",
+          yellow: "#ffcc00",
+          orange: "#ff6600",
+          purple: "#9900cc",
+          pink: "#ff00cc",
+          teal: "#00cccc",
+          cyan: "#00ffff",
+          magenta: "#ff00ff",
+          lime: "#00ff00",
+          brown: "#8b4513",
+          black: "#000000",
+          white: "#ffffff",
+          gray: "#808080",
+          grey: "#808080",
+          navy: "#000080",
+          maroon: "#800000",
+          olive: "#808000",
+          aqua: "#00ffff",
+          silver: "#c0c0c0",
+          gold: "#ffd700",
+          indigo: "#4b0082",
+          violet: "#8a2be2",
+          coral: "#ff7f50",
+          salmon: "#fa8072",
+          turquoise: "#40e0d0",
+          khaki: "#f0e68c",
+          lavender: "#e6e6fa",
+          plum: "#dda0dd",
+          beige: "#f5f5dc",
+          tan: "#d2b48c",
+        };
+        const foundColors: string[] = [];
+
+        // Extract all color names mentioned in the prompt (case-insensitive)
+        Object.keys(colorMap).forEach((colorName) => {
+          // Use word boundary to match whole words only
+          const regex = new RegExp(`\\b${colorName}\\b`, "i");
+          if (regex.test(promptText)) {
+            foundColors.push(colorMap[colorName]);
+          }
+        });
+
+        // Extract hex colors (supports both 6-digit and 3-digit hex)
+        const hexMatches = promptText.match(/#[0-9a-f]{3,6}/gi);
+        if (hexMatches) {
+          // Convert 3-digit hex to 6-digit if needed
+          hexMatches.forEach((hex) => {
+            if (hex.length === 4) {
+              // Convert #rgb to #rrggbb
+              const r = hex[1];
+              const g = hex[2];
+              const b = hex[3];
+              foundColors.push(`#${r}${r}${g}${g}${b}${b}`);
+            } else {
+              foundColors.push(hex);
+            }
+          });
+        }
+
+        // Extract RGB colors like "rgb(255, 0, 0)" or "rgba(255, 0, 0, 0.5)"
+        const rgbMatches = promptText.match(/rgba?\([^)]+\)/gi);
+        if (rgbMatches) {
+          foundColors.push(...rgbMatches);
+        }
+
+        // Remove duplicates while preserving order
+        const uniqueColors = Array.from(new Set(foundColors));
+
+        return uniqueColors.length > 0 ? uniqueColors : undefined;
       };
 
-      setChartConfig(defaultConfig);
+      const extractedColors = extractColors(promptLower);
+
+      // Get ECharts configuration
+      const echartsConfig = getEChartsConfig(chartType);
+      if (!echartsConfig) {
+        console.warn(
+          `Unknown chart type: ${chartType}, using default bar chart`
+        );
+        chartType = "bar";
+      }
+
+      const isStacked =
+        chartType === "stackedbar" || chartType === "stackedarea";
+      const isGrouped = chartType === "groupedbar";
+
+      // Use flattened data if available
+      const dataToUse =
+        dataKeys.flattenedData && dataKeys.flattenedData.length > 0
+          ? dataKeys.flattenedData
+          : data;
+
+      // Generate ECharts option
+      const elementConfig: EChartsElementConfig = {
+        nameKey: nameKeyToUse,
+        valueKey: valueKeyToUse,
+        dataKeys: dataKeysToUse
+          ? dataKeysToUse.split(",").map((k) => k.trim())
+          : undefined,
+        colors:
+          extractedColors && extractedColors.length > 0
+            ? extractedColors
+            : getRandomColorPalette(20),
+        isStacked,
+        isGrouped,
+        hasTrendline,
+        multipleTrendlines,
+        data: dataToUse,
+      };
+
+      const echartsOption = echartsConfig
+        ? echartsConfig.generateOption(elementConfig)
+        : null;
+
+      if (!echartsOption) {
+        // Use setTimeout to avoid setState in effect
+        setTimeout(() => {
+          setError(
+            `Failed to generate chart configuration for type: ${chartType}`
+          );
+        }, 0);
+        return;
+      }
+
+      const defaultConfig: GeneratedChartConfig = {
+        chartType,
+        echartsOption,
+        dataMapping: {
+          nameKey: nameKeyToUse,
+          valueKey: valueKeyToUse,
+          ...(dataKeysToUse && { dataKeys: dataKeysToUse }),
+        },
+        colors:
+          extractedColors && extractedColors.length > 0
+            ? extractedColors
+            : getRandomColorPalette(20),
+        promptHash: dataPromptHash,
+      };
+
+      // Use setTimeout to avoid setState in effect warning
+      setTimeout(() => {
+        setChartConfig(defaultConfig);
+        setError(null);
+      }, 0);
     } else {
-      setChartConfig(null);
+      // No data or invalid data - clear chart
+      previousHashRef.current = "";
+      setTimeout(() => {
+        setChartConfig(null);
+      }, 0);
     }
-  }, [data, prompt, dataKeys]);
-
-  // Generic function to generate default elements for any chart type
-  function generateDefaultElements(
-    type: string,
-    keys: { nameKey: string; valueKey: string }
-  ): ChartElement[] {
-    if (type === "pie") {
-      return [
-        {
-          type: "Pie",
-          props: {
-            dataKey: keys.valueKey,
-            cx: "50%",
-            cy: "50%",
-            label: true,
-            outerRadius: 120,
-          },
-        },
-        { type: "Tooltip", props: {} },
-        { type: "Legend", props: {} },
-      ];
-    }
-
-    return [
-      { type: "CartesianGrid", props: { strokeDasharray: "3 3" } },
-      { type: "XAxis", props: { dataKey: keys.nameKey } },
-      { type: "YAxis", props: {} },
-      { type: "Tooltip", props: {} },
-      { type: "Legend", props: {} },
-      {
-        type: type === "bar" ? "Bar" : type === "line" ? "Line" : "Area",
-        props: {
-          ...(type === "line" || type === "area" ? { type: "monotone" } : {}),
-          dataKey: keys.valueKey,
-          ...(type === "line"
-            ? { stroke: "#0066ff", strokeWidth: 2 }
-            : type === "area"
-            ? { stroke: "#0066ff", fill: "#0066ff" }
-            : { fill: "#0066ff" }),
-        },
-      },
-    ];
-  }
-
-  // Generic renderer - renders any element structure recursively
-  const renderElement = (
-    element: ChartElement,
-    index: number,
-    chartData: ChartDataPoint[]
-  ): React.ReactNode => {
-    const Component = (
-      Recharts as unknown as Record<string, React.ComponentType>
-    )[element.type];
-
-    if (!Component) {
-      console.warn(`Component ${element.type} not found`);
-      return null;
-    }
-
-    // Special handling for Pie charts
-    if (element.type === "Pie" && chartConfig) {
-      const pieData = chartData.map((item) => ({
-        name: String(item[chartConfig.dataMapping.nameKey] || ""),
-        value: Number(item[chartConfig.dataMapping.valueKey] || 0),
-      }));
-
-      const PieComponent = Component as React.ComponentType<{
-        data: Array<{ name: string; value: number }>;
-        children?: React.ReactNode;
-        [key: string]: unknown;
-      }>;
-
-      return (
-        <PieComponent key={index} {...element.props} data={pieData}>
-          {pieData.map((_entry, idx: number) => (
-            <Recharts.Cell
-              key={`cell-${idx}`}
-              fill={
-                chartConfig.colors?.[idx % (chartConfig.colors?.length || 8)] ||
-                "#0066ff"
-              }
-            />
-          ))}
-          {element.children?.map((child, childIndex) =>
-            renderElement(child, childIndex, chartData)
-          )}
-        </PieComponent>
-      );
-    }
-
-    // Generic component renderer
-    const TypedComponent = Component as React.ComponentType<{
-      children?: React.ReactNode;
-      [key: string]: unknown;
-    }>;
-
-    return (
-      <TypedComponent key={index} {...element.props}>
-        {element.children?.map((child, childIndex) =>
-          renderElement(child, childIndex, chartData)
-        )}
-      </TypedComponent>
-    );
-  };
+  }, [data, prompt, dataKeys, dataPromptHash]);
 
   const renderChart = () => {
-    if (!chartConfig || !data || data.length === 0) {
+    if (!data || data.length === 0) {
       return (
-        <div className="empty-chart">
-          <p>
-            {isGenerating
-              ? "Generating chart..."
-              : "No data provided. Enter data and describe your chart to generate a visualization."}
-          </p>
-          <p className="hint">
-            Try: "Create a bar chart" or "Show me a line graph"
-          </p>
+        <div className="empty-state">
+          <p>No data available. Please provide chart data.</p>
         </div>
       );
     }
 
-    const ChartComponent =
-      (Recharts as unknown as Record<string, React.ComponentType>)[
-        chartConfig.componentName
-      ] ||
-      (Recharts as unknown as Record<string, React.ComponentType>)[
-        `${chartConfig.chartType}Chart`
-      ] ||
-      Recharts.LineChart;
-
-    const TypedChartComponent = ChartComponent as React.ComponentType<{
-      children?: React.ReactNode;
-      data?: ChartDataPoint[];
-      [key: string]: unknown;
-    }>;
-
-    // For pie charts, use PieChart wrapper
-    if (chartConfig.chartType === "pie") {
+    if (!chartConfig) {
       return (
-        <Recharts.ResponsiveContainer width="100%" height="100%">
-          <Recharts.PieChart>
-            {chartConfig.elements.map((element, index) =>
-              renderElement(element, index, data)
-            )}
-          </Recharts.PieChart>
-        </Recharts.ResponsiveContainer>
+        <div className="empty-state">
+          <p>Enter a chart description to generate a visualization.</p>
+        </div>
       );
     }
 
-    // For other charts, use the main chart component
+    if (error) {
+      return (
+        <div className="error-state">
+          <p>Error: {error}</p>
+        </div>
+      );
+    }
+
     return (
-      <Recharts.ResponsiveContainer width="100%" height="100%">
-        <TypedChartComponent
-          data={data}
-          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-        >
-          {chartConfig.elements.map((element, index) =>
-            renderElement(element, index, data)
-          )}
-        </TypedChartComponent>
-      </Recharts.ResponsiveContainer>
+      <ReactECharts
+        key={chartConfig.promptHash || chartConfig.chartType}
+        option={chartConfig.echartsOption}
+        style={{ height: "100%", width: "100%" }}
+        opts={{ renderer: "svg" }}
+        notMerge={true}
+      />
     );
   };
 
   return (
-    <div className="chart-container">
+    <div className="chart-container" style={{ height: "500px", width: "100%" }}>
       <h3>Generated Chart</h3>
       {renderChart()}
     </div>

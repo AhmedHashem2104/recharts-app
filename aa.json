@@ -1,0 +1,72 @@
+[
+  {
+    "agent_name": "dbrdak",
+    "quality_score": 1.0,
+    "total_interactions": 8,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 8
+  },
+  {
+    "agent_name": "tmcdermott",
+    "quality_score": 1.0,
+    "total_interactions": 1,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 1
+  },
+  {
+    "agent_name": "iibrahim",
+    "quality_score": 1.0,
+    "total_interactions": 3,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 3
+  },
+  {
+    "agent_name": "Name Here",
+    "quality_score": 1.0,
+    "total_interactions": 1,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 1
+  },
+  {
+    "agent_name": "mogamal",
+    "quality_score": 1.0,
+    "total_interactions": 1,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 1
+  },
+  {
+    "agent_name": "pobrien",
+    "quality_score": 1.0,
+    "total_interactions": 1,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 1
+  },
+  {
+    "agent_name": "talonge",
+    "quality_score": 1.0,
+    "total_interactions": 1,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 1
+  },
+  {
+    "agent_name": "amaged",
+    "quality_score": 1.0,
+    "total_interactions": 1,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 1
+  },
+  {
+    "agent_name": "mnoaman",
+    "quality_score": 1.0,
+    "total_interactions": 4,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 4
+  },
+  {
+    "agent_name": "nbailey",
+    "quality_score": 1.0,
+    "total_interactions": 1,
+    "kpi_score_percent": 100.0,
+    "solved_interactions": 1
+  }
+]

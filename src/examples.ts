@@ -1,5 +1,5 @@
 export interface ChartDataPoint {
-  [key: string]: string | number;
+  [key: string]: string | number | unknown;
 }
 
 export interface ChartExample {
@@ -7,12 +7,13 @@ export interface ChartExample {
   description: string;
   data: ChartDataPoint[];
   prompt: string;
-  chartType: "bar" | "line" | "pie" | "area";
+  chartType: string;
 }
 
 export const chartExamples: ChartExample[] = [
+  // Basic Charts
   {
-    name: "Sales Over Time",
+    name: "Sales Over Time (Bar)",
     description: "Monthly sales data for the first half of the year",
     data: [
       { name: "Jan", value: 400, sales: 4000 },
@@ -26,7 +27,22 @@ export const chartExamples: ChartExample[] = [
     chartType: "bar",
   },
   {
-    name: "Product Categories",
+    name: "Revenue Trends (Line)",
+    description: "Quarterly revenue trends over two years",
+    data: [
+      { name: "Q1 2023", value: 12000, growth: 5 },
+      { name: "Q2 2023", value: 15000, growth: 8 },
+      { name: "Q3 2023", value: 18000, growth: 12 },
+      { name: "Q4 2023", value: 20000, growth: 15 },
+      { name: "Q1 2024", value: 22000, growth: 10 },
+      { name: "Q2 2024", value: 25000, growth: 14 },
+    ],
+    prompt:
+      "Create a line chart showing revenue trends over quarters with trendline",
+    chartType: "line",
+  },
+  {
+    name: "Product Categories (Pie)",
     description: "Distribution of products across different categories",
     data: [
       { name: "Electronics", value: 45, count: 120 },
@@ -39,21 +55,7 @@ export const chartExamples: ChartExample[] = [
     chartType: "pie",
   },
   {
-    name: "Revenue Trends",
-    description: "Quarterly revenue trends over two years",
-    data: [
-      { name: "Q1 2023", value: 12000, growth: 5 },
-      { name: "Q2 2023", value: 15000, growth: 8 },
-      { name: "Q3 2023", value: 18000, growth: 12 },
-      { name: "Q4 2023", value: 20000, growth: 15 },
-      { name: "Q1 2024", value: 22000, growth: 10 },
-      { name: "Q2 2024", value: 25000, growth: 14 },
-    ],
-    prompt: "Create a line chart showing revenue trends over quarters",
-    chartType: "line",
-  },
-  {
-    name: "Website Traffic",
+    name: "Website Traffic (Area)",
     description: "Daily website visitors for a week",
     data: [
       { name: "Monday", value: 1200, pageViews: 3500 },
@@ -68,7 +70,21 @@ export const chartExamples: ChartExample[] = [
     chartType: "area",
   },
   {
-    name: "Regional Performance",
+    name: "Sales vs Target (Scatter)",
+    description: "Scatter plot comparing sales performance vs targets",
+    data: [
+      { name: "Product A", value: 450, target: 400 },
+      { name: "Product B", value: 320, target: 350 },
+      { name: "Product C", value: 580, target: 500 },
+      { name: "Product D", value: 290, target: 300 },
+      { name: "Product E", value: 620, target: 600 },
+      { name: "Product F", value: 380, target: 400 },
+    ],
+    prompt: "Create a scatter plot comparing sales vs targets",
+    chartType: "scatter",
+  },
+  {
+    name: "Regional Performance (Grouped Bar)",
     description: "Sales performance across different regions",
     data: [
       { name: "North", value: 50000, target: 45000 },
@@ -77,11 +93,25 @@ export const chartExamples: ChartExample[] = [
       { name: "West", value: 55000, target: 60000 },
       { name: "Central", value: 40000, target: 40000 },
     ],
-    prompt: "Create a bar chart comparing regional sales performance",
-    chartType: "bar",
+    prompt:
+      "Create a grouped bar chart comparing regional sales performance vs targets",
+    chartType: "groupedbar",
   },
   {
-    name: "User Demographics",
+    name: "Monthly Revenue (Stacked Bar)",
+    description: "Stacked bar chart showing revenue breakdown by category",
+    data: [
+      { name: "Jan", productA: 2000, productB: 1500, productC: 1000 },
+      { name: "Feb", productA: 2200, productB: 1600, productC: 1100 },
+      { name: "Mar", productA: 2500, productB: 1800, productC: 1200 },
+      { name: "Apr", productA: 2300, productB: 1700, productC: 1150 },
+      { name: "May", productA: 2800, productB: 2000, productC: 1300 },
+    ],
+    prompt: "Create a stacked bar chart showing monthly revenue by product",
+    chartType: "stackedbar",
+  },
+  {
+    name: "User Demographics (Donut)",
     description: "Age distribution of platform users",
     data: [
       { name: "18-24", value: 25, percentage: 25 },
@@ -90,8 +120,331 @@ export const chartExamples: ChartExample[] = [
       { name: "45-54", value: 12, percentage: 12 },
       { name: "55+", value: 8, percentage: 8 },
     ],
-    prompt: "Create a pie chart showing user age distribution",
-    chartType: "pie",
+    prompt: "Create a donut chart showing user age distribution",
+    chartType: "donut",
+  },
+  {
+    name: "Sales by Region (Stacked Area)",
+    description: "Stacked area chart showing sales trends by region",
+    data: [
+      { name: "Q1", north: 12000, south: 10000, east: 15000 },
+      { name: "Q2", north: 14000, south: 11000, east: 16000 },
+      { name: "Q3", north: 16000, south: 12000, east: 18000 },
+      { name: "Q4", north: 18000, south: 13000, east: 20000 },
+    ],
+    prompt: "Create a stacked area chart showing sales trends by region",
+    chartType: "stackedarea",
+  },
+  {
+    name: "Product Performance (Bubble)",
+    description: "Bubble chart showing product performance metrics",
+    data: [
+      { name: "Product A", sales: 500, profit: 120, marketShare: 15 },
+      { name: "Product B", sales: 400, profit: 100, marketShare: 12 },
+      { name: "Product C", sales: 600, profit: 150, marketShare: 18 },
+      { name: "Product D", sales: 350, profit: 80, marketShare: 10 },
+      { name: "Product E", sales: 700, profit: 180, marketShare: 22 },
+    ],
+    prompt:
+      "Create a bubble chart showing product sales vs profit with market share as bubble size",
+    chartType: "bubble",
+  },
+  {
+    name: "Team Performance (Radar)",
+    description: "Radar chart showing team performance across multiple metrics",
+    data: [
+      {
+        name: "Team A",
+        speed: 85,
+        quality: 90,
+        collaboration: 80,
+        innovation: 75,
+        efficiency: 88,
+      },
+      {
+        name: "Team B",
+        speed: 75,
+        quality: 85,
+        collaboration: 90,
+        innovation: 80,
+        efficiency: 82,
+      },
+      {
+        name: "Team C",
+        speed: 90,
+        quality: 80,
+        collaboration: 75,
+        innovation: 85,
+        efficiency: 90,
+      },
+    ],
+    prompt:
+      "Create a radar chart showing team performance across different metrics",
+    chartType: "radar",
+  },
+  {
+    name: "Sales Heatmap",
+    description: "Heatmap showing sales performance by region and month",
+    data: [
+      { name: "North", jan: 1200, feb: 1300, mar: 1400, apr: 1350, may: 1500 },
+      { name: "South", jan: 1000, feb: 1100, mar: 1200, apr: 1150, may: 1300 },
+      { name: "East", jan: 1500, feb: 1600, mar: 1700, apr: 1650, may: 1800 },
+      { name: "West", jan: 1100, feb: 1200, mar: 1300, apr: 1250, may: 1400 },
+    ],
+    prompt: "Create a heatmap showing sales by region and month",
+    chartType: "heatmap",
+  },
+  {
+    name: "Department Budget (Treemap)",
+    description: "Treemap showing budget allocation across departments",
+    data: [
+      { name: "Engineering", value: 500000 },
+      { name: "Marketing", value: 300000 },
+      { name: "Sales", value: 400000 },
+      { name: "HR", value: 150000 },
+      { name: "Finance", value: 200000 },
+      { name: "Operations", value: 250000 },
+    ],
+    prompt: "Create a treemap showing budget allocation by department",
+    chartType: "treemap",
+  },
+  {
+    name: "Sales Funnel",
+    description: "Funnel chart showing conversion rates through sales stages",
+    data: [
+      { name: "Leads", value: 10000 },
+      { name: "Qualified", value: 5000 },
+      { name: "Proposals", value: 2500 },
+      { name: "Negotiations", value: 1200 },
+      { name: "Closed", value: 600 },
+    ],
+    prompt: "Create a funnel chart showing sales conversion stages",
+    chartType: "funnel",
+  },
+  {
+    name: "Data Flow (Sankey)",
+    description:
+      "Sankey diagram showing data flow between sources and destinations",
+    data: [
+      { name: "Source A", value: 100 },
+      { name: "Source B", value: 150 },
+      { name: "Source C", value: 200 },
+      { name: "Destination X", value: 180 },
+      { name: "Destination Y", value: 170 },
+      { name: "Destination Z", value: 100 },
+    ],
+    prompt:
+      "Create a sankey diagram showing data flow between sources and destinations",
+    chartType: "sankey",
+  },
+  {
+    name: "Organization Structure (Sunburst)",
+    description: "Sunburst chart showing hierarchical organization structure",
+    data: [
+      { name: "CEO", value: 1 },
+      { name: "VP Engineering", value: 1 },
+      { name: "VP Sales", value: 1 },
+      { name: "VP Marketing", value: 1 },
+      { name: "Engineering Team", value: 20 },
+      { name: "Sales Team", value: 15 },
+      { name: "Marketing Team", value: 10 },
+    ],
+    prompt: "Create a sunburst chart showing organization hierarchy",
+    chartType: "sunburst",
+  },
+  {
+    name: "Stock Prices (Candlestick)",
+    description: "Candlestick chart showing stock price movements (OHLC)",
+    data: [
+      { name: "Day 1", open: 100, high: 110, low: 95, close: 105 },
+      { name: "Day 2", open: 105, high: 115, low: 100, close: 112 },
+      { name: "Day 3", open: 112, high: 118, low: 108, close: 115 },
+      { name: "Day 4", open: 115, high: 120, low: 110, close: 118 },
+      { name: "Day 5", open: 118, high: 125, low: 115, close: 122 },
+      { name: "Day 6", open: 122, high: 128, low: 118, close: 125 },
+      { name: "Day 7", open: 125, high: 130, low: 120, close: 128 },
+    ],
+    prompt:
+      "Create a candlestick chart showing stock price movements with open, high, low, and close values",
+    chartType: "candlestick",
+  },
+  {
+    name: "Multivariate Analysis (Parallel)",
+    description: "Parallel coordinates chart for multivariate data analysis",
+    data: [
+      { name: "Product A", price: 50, quality: 8, sales: 1000, rating: 4.5 },
+      { name: "Product B", price: 75, quality: 9, sales: 800, rating: 4.8 },
+      { name: "Product C", price: 30, quality: 6, sales: 1500, rating: 3.9 },
+      { name: "Product D", price: 100, quality: 10, sales: 500, rating: 5.0 },
+      { name: "Product E", price: 40, quality: 7, sales: 1200, rating: 4.2 },
+    ],
+    prompt:
+      "Create a parallel coordinates chart for multivariate product analysis",
+    chartType: "parallel",
+  },
+  {
+    name: "Network Connections (Graph)",
+    description: "Network graph showing connections between nodes",
+    data: [
+      { name: "Node A", value: 10 },
+      { name: "Node B", value: 15 },
+      { name: "Node C", value: 8 },
+      { name: "Node D", value: 12 },
+      { name: "Node E", value: 20 },
+      { name: "Node F", value: 5 },
+    ],
+    prompt: "Create a network graph showing connections between nodes",
+    chartType: "graph",
+  },
+  {
+    name: "Event Timeline (Theme River)",
+    description: "Theme river chart showing event flows over time",
+    data: [
+      { name: "2024-01-01", eventA: 10, eventB: 15, eventC: 8 },
+      { name: "2024-01-02", eventA: 12, eventB: 18, eventC: 10 },
+      { name: "2024-01-03", eventA: 15, eventB: 20, eventC: 12 },
+      { name: "2024-01-04", eventA: 18, eventB: 22, eventC: 15 },
+      { name: "2024-01-05", eventA: 20, eventB: 25, eventC: 18 },
+    ],
+    prompt: "Create a theme river chart showing event flows over time",
+    chartType: "themeriver",
+  },
+  {
+    name: "Animated Scatter (Effect Scatter)",
+    description: "Effect scatter chart with animated ripple effects",
+    data: [
+      { name: "Point A", x: 10, y: 20 },
+      { name: "Point B", x: 15, y: 25 },
+      { name: "Point C", x: 20, y: 30 },
+      { name: "Point D", x: 25, y: 35 },
+      { name: "Point E", x: 30, y: 40 },
+      { name: "Point F", x: 35, y: 45 },
+    ],
+    prompt: "Create an effect scatter chart with animated ripple effects",
+    chartType: "effectscatter",
+  },
+  {
+    name: "Route Visualization (Lines)",
+    description: "Lines chart showing route paths",
+    data: [
+      { name: "Point 1", x: 0, y: 0 },
+      { name: "Point 2", x: 10, y: 5 },
+      { name: "Point 3", x: 20, y: 10 },
+      { name: "Point 4", x: 30, y: 15 },
+      { name: "Point 5", x: 40, y: 20 },
+    ],
+    prompt: "Create a lines chart showing route paths",
+    chartType: "lines",
+  },
+  {
+    name: "Organization Chart (Tree)",
+    description: "Hierarchical tree chart showing organization structure",
+    data: [
+      { name: "CEO", value: 1 },
+      { name: "CTO", value: 1 },
+      { name: "CFO", value: 1 },
+      { name: "Engineering Manager", value: 1 },
+      { name: "Product Manager", value: 1 },
+      { name: "Finance Manager", value: 1 },
+    ],
+    prompt: "Create a hierarchical tree chart showing organization structure",
+    chartType: "tree",
+  },
+  {
+    name: "Daily Activity (Calendar)",
+    description: "Calendar heatmap showing daily activity levels",
+    data: [
+      { name: "2024-01-01", value: 10 },
+      { name: "2024-01-02", value: 15 },
+      { name: "2024-01-03", value: 8 },
+      { name: "2024-01-04", value: 20 },
+      { name: "2024-01-05", value: 12 },
+      { name: "2024-01-06", value: 18 },
+      { name: "2024-01-07", value: 25 },
+      { name: "2024-01-08", value: 14 },
+      { name: "2024-01-09", value: 22 },
+      { name: "2024-01-10", value: 16 },
+    ],
+    prompt: "Create a calendar heatmap showing daily activity levels",
+    chartType: "calendar",
+  },
+  {
+    name: "Polar Area Chart",
+    description: "Polar area chart showing data in circular format",
+    data: [
+      { name: "Category A", value: 30 },
+      { name: "Category B", value: 45 },
+      { name: "Category C", value: 25 },
+      { name: "Category D", value: 40 },
+      { name: "Category E", value: 35 },
+    ],
+    prompt: "Create a polar area chart showing categories in circular format",
+    chartType: "polararea",
+  },
+  {
+    name: "Distribution (Histogram)",
+    description: "Histogram showing data distribution",
+    data: [
+      { name: "0-10", value: 5 },
+      { name: "10-20", value: 12 },
+      { name: "20-30", value: 18 },
+      { name: "30-40", value: 25 },
+      { name: "40-50", value: 20 },
+      { name: "50-60", value: 15 },
+      { name: "60-70", value: 8 },
+    ],
+    prompt: "Create a histogram showing data distribution",
+    chartType: "histogram",
+  },
+  {
+    name: "Statistical Analysis (Box Plot)",
+    description: "Box plot showing statistical distribution of data",
+    data: [
+      { name: "Dataset A", value: 25 },
+      { name: "Dataset B", value: 30 },
+      { name: "Dataset C", value: 28 },
+      { name: "Dataset D", value: 32 },
+      { name: "Dataset E", value: 27 },
+    ],
+    prompt: "Create a box plot showing statistical distribution",
+    chartType: "boxplot",
+  },
+  {
+    name: "Lollipop Chart",
+    description: "Lollipop chart showing values with circular markers",
+    data: [
+      { name: "Item A", value: 45 },
+      { name: "Item B", value: 38 },
+      { name: "Item C", value: 52 },
+      { name: "Item D", value: 41 },
+      { name: "Item E", value: 48 },
+    ],
+    prompt: "Create a lollipop chart showing values with circular markers",
+    chartType: "lollipop",
+  },
+  {
+    name: "Density Plot",
+    description: "Density plot showing probability distribution",
+    data: [
+      { name: "0", value: 0.1 },
+      { name: "1", value: 0.3 },
+      { name: "2", value: 0.5 },
+      { name: "3", value: 0.7 },
+      { name: "4", value: 0.9 },
+      { name: "5", value: 0.8 },
+      { name: "6", value: 0.6 },
+      { name: "7", value: 0.4 },
+      { name: "8", value: 0.2 },
+    ],
+    prompt: "Create a density plot showing probability distribution",
+    chartType: "density",
+  },
+  {
+    name: "Gauge/Radial Bar",
+    description: "Gauge chart showing a single metric value",
+    data: [{ name: "Performance", value: 75 }],
+    prompt: "Create a gauge chart showing performance metric",
+    chartType: "radialbar",
   },
 ];
 
