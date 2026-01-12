@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import ChartGenerator from "./components/ChartGenerator";
-import { chartExamples, defaultExample, type ChartDataPoint } from "./examples";
+import { chartExamples, defaultExample } from "./examples";
+import type { ChartDataPoint } from "./types";
 import "./App.css";
 
 function App() {
@@ -131,7 +132,7 @@ function App() {
               onChange={(e) => {
                 const newText = e.target.value;
                 setJsonText(newText);
-                
+
                 // Try to parse and update chartData if valid
                 try {
                   const parsed = JSON.parse(newText);
@@ -155,11 +156,7 @@ function App() {
                 }
               }}
             />
-            {jsonError && (
-              <div className="json-error" style={{ color: "#ff4444", fontSize: "0.875rem", marginTop: "0.5rem" }}>
-                {jsonError}
-              </div>
-            )}
+            {jsonError && <div className="json-error">{jsonError}</div>}
           </div>
 
           <div className="input-group">
@@ -171,33 +168,6 @@ function App() {
               value={chartPrompt}
               onChange={(e) => setChartPrompt(e.target.value)}
             />
-          </div>
-
-          <div className="generative-ui-section">
-            <h2>AI Chart Generation</h2>
-            <p>
-              Use the chat interface (sidebar icon) to describe your chart, or
-              enter data and a description above.
-            </p>
-            <div className="instruction-text">
-              <strong>💡 Try saying in the chat:</strong>
-              <ul>
-                <li>"Create a bar chart with the current data"</li>
-                <li>"Generate a line graph showing the trends"</li>
-                <li>"Make a pie chart from this data: [paste your data]"</li>
-                <li>"Show me an area chart"</li>
-              </ul>
-            </div>
-            <div className="info-box">
-              <p>
-                <strong>How it works:</strong>
-              </p>
-              <p>
-                The AI will analyze your data and description, then
-                automatically generate the appropriate chart type with proper
-                styling and labels.
-              </p>
-            </div>
           </div>
         </div>
 
