@@ -1,5 +1,6 @@
 // ECharts configuration for all supported chart types
 import * as echarts from "echarts";
+import type { ChartDataPoint, GraphNodeData } from "../types";
 
 export interface EChartsConfig {
   chartType: string;
@@ -18,7 +19,7 @@ export interface EChartsElementConfig {
   isGrouped?: boolean;
   hasTrendline?: boolean;
   multipleTrendlines?: boolean;
-  data: Array<Record<string, unknown>>;
+  data: ChartDataPoint[];
 }
 
 // Generate random vibrant colors
@@ -1048,48 +1049,191 @@ export const ECHARTS_TYPE_CONFIGS: Record<string, EChartsConfig> = {
     echartsType: "sankey",
     keywords: ["sankey", "flow", "alluvial"],
     generateOption: (config) => {
-      // Sankey requires special data format
+      // Sankey requires special data format with nodes and links
       const nodes: Array<{ name: string }> = [];
       const links: Array<{ source: string; target: string; value: number }> =
         [];
+      const nodeMap = new Map<string, boolean>();
 
-      config.data.forEach((item, idx) => {
-        const source = String(item[config.nameKey] || `Node${idx}`);
-        const value =
-          typeof item[config.valueKey] === "number" ? item[config.valueKey] : 0;
+      // Check if data already has source/target/value structure
+      const hasSankeyStructure = config.data.some(
+        (item) => "source" in item && "target" in item
+      );
 
-        if (!nodes.find((n) => n.name === source)) {
-          nodes.push({ name: source });
-        }
+      if (hasSankeyStructure) {
+        // Data already in Sankey format
+        config.data.forEach((item) => {
+          const sourceValue = item.source;
+          const targetValue = item.target;
+          const valueValue = item.value;
+          const source =
+            typeof sourceValue === "string"
+              ? sourceValue
+              : String(sourceValue || "");
+          const target =
+            typeof targetValue === "string"
+              ? targetValue
+              : String(targetValue || "");
+          const value =
+            typeof valueValue === "number"
+              ? valueValue
+              : typeof valueValue === "string"
+              ? parseFloat(valueValue) || 0
+              : 0;
 
-        if (idx < config.data.length - 1) {
-          const target = String(
-            config.data[idx + 1][config.nameKey] || `Node${idx + 1}`
-          );
-          if (!nodes.find((n) => n.name === target)) {
-            nodes.push({ name: target });
+          if (source && !nodeMap.has(source)) {
+            nodes.push({ name: source });
+            nodeMap.set(source, true);
           }
-          links.push({
-            source,
-            target,
-            value:
-              typeof value === "number"
-                ? value
-                : typeof value === "string"
-                ? parseFloat(value) || 0
-                : 0,
+          if (target && !nodeMap.has(target)) {
+            nodes.push({ name: target });
+            nodeMap.set(target, true);
+          }
+          if (source && target && value > 0) {
+            links.push({ source, target, value });
+          }
+        });
+      } else {
+        // Convert simple data to Sankey format
+        // Group data into sources and destinations
+        const sources: Array<{ name: string; value: number }> = [];
+        const destinations: Array<{ name: string; value: number }> = [];
+
+        config.data.forEach((item) => {
+          const nameItem = item[config.nameKey];
+          const valueItem = item[config.valueKey];
+          const name = String(nameItem || "");
+          const value =
+            typeof valueItem === "number"
+              ? valueItem
+              : typeof valueItem === "string"
+              ? parseFloat(valueItem) || 0
+              : 0;
+
+          if (
+            name.toLowerCase().includes("source") ||
+            name.toLowerCase().includes("from")
+          ) {
+            sources.push({ name, value });
+          } else if (
+            name.toLowerCase().includes("destination") ||
+            name.toLowerCase().includes("target") ||
+            name.toLowerCase().includes("to")
+          ) {
+            destinations.push({ name, value });
+          } else {
+            // Default: treat first half as sources, second half as destinations
+            if (sources.length < destinations.length || sources.length === 0) {
+              sources.push({ name, value });
+            } else {
+              destinations.push({ name, value });
+            }
+          }
+        });
+
+        // Create nodes
+        [...sources, ...destinations].forEach((item) => {
+          if (!nodeMap.has(item.name)) {
+            nodes.push({ name: item.name });
+            nodeMap.set(item.name, true);
+          }
+        });
+
+        // Create links: connect sources to destinations proportionally
+        sources.forEach((source) => {
+          destinations.forEach((dest) => {
+            // Distribute source value to destinations
+            const totalDestValue = destinations.reduce(
+              (sum, d) => sum + d.value,
+              0
+            );
+            const linkValue =
+              totalDestValue > 0
+                ? Math.round((source.value * dest.value) / totalDestValue)
+                : Math.round(source.value / destinations.length);
+            if (linkValue > 0) {
+              links.push({
+                source: source.name,
+                target: dest.name,
+                value: linkValue,
+              });
+            }
           });
+        });
+
+        // If no links created, create sequential links
+        if (links.length === 0 && config.data.length >= 2) {
+          for (let i = 0; i < config.data.length - 1; i++) {
+            const source = String(config.data[i][config.nameKey] || `Node${i}`);
+            const target = String(
+              config.data[i + 1][config.nameKey] || `Node${i + 1}`
+            );
+            const sourceValue =
+              typeof config.data[i][config.valueKey] === "number"
+                ? config.data[i][config.valueKey]
+                : 0;
+            const targetValue =
+              typeof config.data[i + 1][config.valueKey] === "number"
+                ? config.data[i + 1][config.valueKey]
+                : 0;
+
+            if (!nodeMap.has(source)) {
+              nodes.push({ name: source });
+              nodeMap.set(source, true);
+            }
+            if (!nodeMap.has(target)) {
+              nodes.push({ name: target });
+              nodeMap.set(target, true);
+            }
+
+            const linkValue =
+              Math.max(
+                typeof sourceValue === "number" ? sourceValue : 0,
+                typeof targetValue === "number" ? targetValue : 0
+              ) || 10;
+            links.push({
+              source,
+              target,
+              value: linkValue,
+            });
+          }
         }
-      });
+      }
+
+      // Ensure we have at least some nodes and links
+      if (nodes.length === 0) {
+        nodes.push({ name: "Node 1" }, { name: "Node 2" });
+        links.push({ source: "Node 1", target: "Node 2", value: 10 });
+      }
+
+      const tooltipFormatter: echarts.TooltipComponentFormatterCallback<
+        echarts.TooltipComponentFormatterCallbackParams
+      > = (params: echarts.TooltipComponentFormatterCallbackParams) => {
+        if (Array.isArray(params)) {
+          return params
+            .map((p) => `${p.name || ""}: ${p.value || 0}`)
+            .join("<br/>");
+        }
+        const dataType = (params as { dataType?: string }).dataType;
+        if (dataType === "edge") {
+          return `${params.name || ""}: ${params.value || 0}`;
+        }
+        const data = params.data as { name?: string; value?: number } | null;
+        return `${data?.name || params.name || ""}: ${
+          data?.value || params.value || 0
+        }`;
+      };
 
       return {
         tooltip: {
           trigger: "item",
           triggerOn: "mousemove",
+          formatter: tooltipFormatter,
         },
         series: [
           {
             type: "sankey",
+            layout: "none",
             data: nodes,
             links,
             emphasis: {
@@ -1098,6 +1242,13 @@ export const ECHARTS_TYPE_CONFIGS: Record<string, EChartsConfig> = {
             lineStyle: {
               color: "gradient",
               curveness: 0.5,
+            },
+            itemStyle: {
+              borderWidth: 1,
+              borderColor: "#aaa",
+            },
+            label: {
+              fontSize: 12,
             },
           },
         ],
@@ -1671,7 +1822,7 @@ export const ECHARTS_TYPE_CONFIGS: Record<string, EChartsConfig> = {
           {
             type: "graph",
             layout: "force",
-            symbolSize: (data: { value?: number | unknown }) => {
+            symbolSize: (data: GraphNodeData) => {
               const val = typeof data.value === "number" ? data.value : 10;
               return Math.max(10, Math.min(50, val / 10));
             },
@@ -1965,9 +2116,7 @@ export const ECHARTS_TYPE_CONFIGS: Record<string, EChartsConfig> = {
         children: TreeNode[];
       }
 
-      const buildTree = (
-        items: Array<Record<string, unknown>>
-      ): TreeNode | null => {
+      const buildTree = (items: ChartDataPoint[]): TreeNode | null => {
         if (items.length === 0) return null;
 
         const val0 = items[0][config.valueKey];

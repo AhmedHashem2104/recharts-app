@@ -10,9 +10,11 @@ export interface ChartTypeConfig {
   supportsMultipleSeries?: boolean;
 }
 
+import type { ChartElementProps } from "../types";
+
 export interface ChartElement {
   type: string;
-  props?: Record<string, unknown>;
+  props?: ChartElementProps;
   children?: ChartElement[];
 }
 

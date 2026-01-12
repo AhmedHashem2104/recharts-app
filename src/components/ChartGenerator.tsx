@@ -9,22 +9,22 @@ import {
   type EChartsElementConfig,
 } from "./echartsConfig";
 
-// Support any data structure - nested objects, arrays, etc.
-type ChartDataPoint = Record<string, unknown>;
+import type { ChartDataPoint, FlattenedDataPoint, ChartNestedObject, ChartValue, ChartValueArray } from "../types";
 
 // Helper function to flatten nested objects and extract all keys
 const flattenObject = (
-  obj: unknown,
+  obj: ChartDataPoint | ChartNestedObject,
   prefix = "",
-  result: Record<string, unknown> = {}
-): Record<string, unknown> => {
-  if (!obj || typeof obj !== "object") {
+  result: FlattenedDataPoint = {}
+): FlattenedDataPoint => {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
     return result;
   }
 
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const value = (obj as Record<string, unknown>)[key];
+  const objRecord = obj as ChartDataPoint | ChartNestedObject;
+  for (const key in objRecord) {
+    if (Object.prototype.hasOwnProperty.call(objRecord, key)) {
+      const value = objRecord[key];
       const newKey = prefix ? `${prefix}.${key}` : key;
 
       if (value === null || value === undefined) {
@@ -32,18 +32,20 @@ const flattenObject = (
       } else if (Array.isArray(value)) {
         if (value.length > 0) {
           const firstItem = value[0];
-          if (typeof firstItem === "number" || typeof firstItem === "string") {
-            result[newKey] = value;
+          if (typeof firstItem === "number" || typeof firstItem === "string" || typeof firstItem === "boolean") {
+            result[newKey] = value as ChartValueArray;
           } else if (typeof firstItem === "object" && firstItem !== null) {
             value.forEach((item, idx) => {
-              flattenObject(item, `${newKey}[${idx}]`, result);
+              if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+                flattenObject(item as ChartNestedObject, `${newKey}[${idx}]`, result);
+              }
             });
           }
         }
       } else if (typeof value === "object" && !(value instanceof Date)) {
-        flattenObject(value, newKey, result);
+        flattenObject(value as ChartNestedObject, newKey, result);
       } else {
-        result[newKey] = value;
+        result[newKey] = value as ChartValue;
       }
     }
   }
@@ -511,7 +513,11 @@ const ChartGenerator = ({ data, prompt }: ChartGeneratorProps) => {
     if (!data || data.length === 0) {
       return (
         <div className="empty-state">
-          <p>No data available. Please provide chart data.</p>
+          <div className="empty-state-icon">📊</div>
+          <p className="empty-state-title">No Data Available</p>
+          <p className="empty-state-message">
+            Please provide chart data in the JSON input field.
+          </p>
         </div>
       );
     }
@@ -519,7 +525,11 @@ const ChartGenerator = ({ data, prompt }: ChartGeneratorProps) => {
     if (!chartConfig) {
       return (
         <div className="empty-state">
-          <p>Enter a chart description to generate a visualization.</p>
+          <div className="empty-state-icon">✨</div>
+          <p className="empty-state-title">Ready to Generate</p>
+          <p className="empty-state-message">
+            Enter a chart description to generate a visualization.
+          </p>
         </div>
       );
     }
@@ -527,26 +537,74 @@ const ChartGenerator = ({ data, prompt }: ChartGeneratorProps) => {
     if (error) {
       return (
         <div className="error-state">
-          <p>Error: {error}</p>
+          <div className="error-state-icon">⚠️</div>
+          <p className="error-state-title">Chart Generation Error</p>
+          <p className="error-state-message">{error}</p>
         </div>
       );
     }
 
     return (
-      <ReactECharts
-        key={chartConfig.promptHash || chartConfig.chartType}
-        option={chartConfig.echartsOption}
-        style={{ height: "100%", width: "100%" }}
-        opts={{ renderer: "svg" }}
-        notMerge={true}
-      />
+      <div className="chart-wrapper">
+        <ReactECharts
+          key={chartConfig.promptHash || chartConfig.chartType}
+          option={chartConfig.echartsOption}
+          style={{ height: "100%", width: "100%" }}
+          opts={{ renderer: "svg" }}
+          notMerge={true}
+        />
+      </div>
     );
   };
 
+  // Extract chart title from prompt or use default
+  const getChartTitle = () => {
+    if (!chartConfig) return "Chart Preview";
+    const titleMatch = prompt.match(/(?:titled?|title:)\s*["']?([^"']+)["']?/i);
+    if (titleMatch) return titleMatch[1];
+    if (chartConfig.chartType) {
+      return `${
+        chartConfig.chartType.charAt(0).toUpperCase() +
+        chartConfig.chartType.slice(1)
+      } Chart`;
+    }
+    return "Generated Chart";
+  };
+
+  // Get chart type badge color
+  const getChartTypeBadgeClass = () => {
+    if (!chartConfig) return "";
+    const type = chartConfig.chartType.toLowerCase();
+    if (["bar", "stackedbar", "groupedbar"].includes(type)) return "badge-blue";
+    if (["line", "area", "stackedarea"].includes(type)) return "badge-green";
+    if (["pie", "donut", "sunburst"].includes(type)) return "badge-purple";
+    if (["scatter", "bubble", "effectscatter"].includes(type))
+      return "badge-orange";
+    if (["radar", "polararea", "radialbar"].includes(type)) return "badge-pink";
+    return "badge-gray";
+  };
+
   return (
-    <div className="chart-container" style={{ height: "500px", width: "100%" }}>
-      <h3>Generated Chart</h3>
-      {renderChart()}
+    <div className="chart-container">
+      <div className="chart-header">
+        <div className="chart-header-left">
+          <h3 className="chart-title">{getChartTitle()}</h3>
+          {chartConfig && (
+            <span className={`chart-type-badge ${getChartTypeBadgeClass()}`}>
+              {chartConfig.chartType}
+            </span>
+          )}
+        </div>
+        {chartConfig && data && data.length > 0 && (
+          <div className="chart-stats">
+            <span className="stat-item">
+              <span className="stat-label">Data Points:</span>
+              <span className="stat-value">{data.length}</span>
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="chart-content">{renderChart()}</div>
     </div>
   );
 };
